@@ -1,0 +1,20 @@
+[
+  {
+    "id": "spot001",
+    "artistId": "001",
+    "name": "小波月海岸（初日の出）",
+    "description": "男３人、初日の出",
+    "lat": 35.179684,
+    "lng": 140.369883,
+    "relatedVideoId": "T823CNA5-54"
+  },
+  {
+    "id": "spot002",
+    "artistId": "001",
+    "name": "志摩スペイン村",
+    "description": "修学旅行",
+    "lat": 34.362225,
+    "lng": 136.845093,
+    "relatedVideoId": null
+  }
+]

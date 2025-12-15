@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聖地巡礼 スタンプラリー</title>
+    
+    <!-- 1. あなたが貼り付けた Leaflet の CSS (必須) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+
+    <!-- 2. あなたが貼り付けた CSS を <style> タグの中に移動 -->
+    <!-- (※180px は小さいので、画面の高さの60% (60vh) に変更しました) -->
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        h1, h2 {
+            text-align: center;
+            color: #333;
+        }
+        #map {
+            /* height: 180px; */ /* ← 元のCSS */
+            height: 60vh; /* 画面の高さの60% */
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .button-container {
+            text-align: center;
+            padding: 20px;
+        }
+        button {
+            font-size: 16px;
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #visited-list {
+            list-style: none;
+            padding: 0 20px;
+            max-width: 600px;
+            margin: 20px auto;
+        }
+        #visited-list li {
+            background-color: white;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            color: #555;
+        }
+        /* 訪問済みの聖地のスタンプ風アイコン */
+        .visited-icon {
+            filter: grayscale(100%) opacity(60%); /* 例：訪問済みはグレーアウト */
+        }
+    </style>
+</head>
+<body>
+
+    <h1>聖地巡礼 スタンプラリー</h1>
+    
+    <!-- 3. あなたが貼り付けた地図の表示エリア -->
+    <div id="map"></div>
+
+    <div class="button-container">
+        <!-- 4. チェックインを実行するボタン -->
+        <button id="check-in-button">現在地を取得 ＆ チェックイン</button>
+    </div>
+
+    <h2>スタンプ帳（訪問済みの聖地一覧）</h2>
+    <!-- 5. 訪問済みの聖地一覧を表示するリスト -->
+    <ul id="visited-list">
+        <li>読み込み中...</li>
+    </ul>
+
+    <!-- 6. あなたが貼り付けた Leaflet の JavaScript (必須) -->
+    <!-- (CSSの後、</body>の直前に置くのがベスト) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+
+    <!-- 7. アプリの「頭脳」となるJavaScript -->
+    <script>
+        // ------------------------------------------------
+        // 1. 聖地の位置情報データ（spots.js の代わり）
+        // ------------------------------------------------
+        const spots = [
+            { id: 'spot001', name: '〇〇公園（MV撮影地）', lat: 35.6812, lng: 139.7671 },
+            { id: 'spot002', name: '××カフェ（雑誌掲載）', lat: 35.6830, lng: 139.7680 }
+            // ( ... ここに聖地リストを追加していく ... )
+        ];
+        
+        // 聖地のマーカーを保持する
+        let spotMarkers = {}; 
+
+        // ------------------------------------------------
+        // 2. 地図の初期化 (Leaflet.js + OpenStreetMap)
+        // ------------------------------------------------
+        // [35.681, 139.767] は東京駅の座標。zoom: 14 は拡大レベル
+        const map = L.map('map').setView([35.681, 139.767], 14);
+
+        // OpenStreetMap（OSM）の無料地図タイルを使用
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // ------------------------------------------------
+        // 3. 聖地ピン（マーカー）の表示
+        // ------------------------------------------------
+        function initializeSpots() {
+            spots.forEach(spot => {
+                // ★ localStorage[cite:"localStorage"]（ブラウザの記憶）を確認
+                const isVisited = localStorage.getItem(spot.id) === 'visited';
+
+                const marker = L.marker([spot.lat, spot.lng]).addTo(map)
+                    .bindPopup(spot.name); // ピンをクリックした時の名前
+
+                if (isVisited) {
+                    // ★ 訪問済みなら、アイコンをスタンプ風（グレーアウト）にする
+                    marker.getElement().classList.add('visited-icon');
+                }
+                
+                // 後で操作できるようにマーカーを保存
+                spotMarkers[spot.id] = marker; 
+            });
+        }
+
+        // ------------------------------------------------
+        // 4. 訪問済み聖地一覧（スタンプ帳[cite:"訪れた場合スタンプみたいので表示するとかして訪れた聖地一覧を表示させたい"]）の表示
+        // ------------------------------------------------
+        function updateVisitedList() {
+            const listElement = document.getElementById('visited-list');
+            listElement.innerHTML = ""; // リストを一旦空にする
+            let visitedCount = 0;
+
+            spots.forEach(spot => {
+                // ★ localStorage[cite:"localStorage"]（ブラウザの記憶）を確認
+                if (localStorage.getItem(spot.id) === 'visited') {
+                    const li = document.createElement('li');
+                    li.textContent = `✅ ${spot.name}`; // 訪問済み
+                    listElement.appendChild(li);
+                    visitedCount++;
+                }
+            });
+
+            if (visitedCount === 0) {
+                listElement.innerHTML = "<li>まだ訪問した聖地はありません</li>";
+            }
+        }
+
+        // ------------------------------------------------
+        // 5. チェックイン機能 (navigator.geolocation[cite:"navigator.geolocation オブジェクトを使うので行ける？"])
+        // ------------------------------------------------
+        function checkIn() {
+            console.log("現在地を取得中...");
+            
+            // (A) navigator.geolocation[cite:"navigator.geolocation オブジェクトを使うので行ける？"] で現在地を取得
+            navigator.geolocation.getCurrentPosition(
+                // (B) 成功した場合
+                (position) => {
+                    const userLat = position.coords.latitude;
+                    const userLng = position.coords.longitude;
+
+                    // ユーザーの現在地にピンを立てる
+                    L.marker([userLat, userLng], { 
+                        // (アイコンをカスタマイズ)
+                    }).addTo(map).bindPopup("あなたの現在地").openPopup();
+                    
+                    // マップの中心を現在地に移動
+                    map.setView([userLat, userLng], 16);
+                    
+                    let checkedIn = false;
+
+                    // (C) 聖地との距離を判定
+                    spots.forEach(spot => {
+                        // 聖地と現在地の距離を計算 (Leafletの機能)
+                        const distance = map.distance([userLat, userLng], [spot.lat, spot.lng]);
+
+                        // (D) 50メートル以内ならチェックイン成功！
+                        if (distance < 50) { 
+                            alert(`【チェックイン成功！】\n${spot.name} のスタンプ[cite:"訪れた場合スタンプみたいので表示するとかして訪れた聖地一覧を表示させたい"]をゲットしました！`);
+                            
+                            // ★ localStorage[cite:"localStorage"]（ブラウザの記憶）に "visited" と保存
+                            localStorage.setItem(spot.id, 'visited');
+                            
+                            // ★ ピンの見た目をスタンプ風[cite:"訪れた場合スタンプみたいので表示するとかして訪れた聖地一覧を表示させたい"]に変える
+                            if(spotMarkers[spot.id]) {
+                                spotMarkers[spot.id].getElement().classList.add('visited-icon');
+                            }
+                            
+                            checkedIn = true;
+                        }
+                    });
+
+                    if (!checkedIn) {
+                        alert("聖地の近くにいません。\n（50m以内に近づいてください）");
+                    }
+                    
+                    // 訪問済みリスト（スタンプ帳[cite:"訪れた場合スタンプみたいので表示するとかして訪れた聖地一覧を表示させたい"]）を更新
+                    updateVisitedList();
+                },
+                // (E) 失敗した場合
+                (error) => {
+                    alert("位置情報を取得できませんでした。\nブラウザの許可設定を確認してください。");
+                    console.error(error);
+                }
+            );
+        }
+
+        // ------------------------------------------------
+        // 6. 実行
+        // ------------------------------------------------
+        
+        // ページが読み込まれたら、地図とリストを初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeSpots();
+            updateVisitedList();
+        });
+
+        // ボタンがクリックされたら、チェックイン機能を実行
+        document.getElementById('check-in-button').addEventListener('click', checkIn);
+
+    </script>
+</body>
+</html>
